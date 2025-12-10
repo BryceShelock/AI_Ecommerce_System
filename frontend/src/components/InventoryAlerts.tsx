@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AlertTriangle, Bell, BellOff, Plus, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -24,19 +23,18 @@ import {
 } from "@/components/ui/select";
 
 interface Alert {
-  id: string;
-  product_id: string;
+  id: string | number;
+  product_id: string | number;
+  product_name: string;
   threshold: number;
+  current_stock: number;
   is_active: boolean;
   last_alerted_at: string | null;
-  products: {
-    id: string;
-    name: string;
-    stock: number;
-  };
 }
 
 const InventoryAlerts = () => {
+  const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+  
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [lowStockAlerts, setLowStockAlerts] = useState<any[]>([]);
@@ -48,21 +46,20 @@ const InventoryAlerts = () => {
   useEffect(() => {
     fetchAlerts();
     fetchProducts();
-    checkAlerts();
   }, []);
 
   const fetchAlerts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('inventory_alerts')
-        .select(`
-          *,
-          products (id, name, stock)
-        `)
-        .order('created_at', { ascending: false });
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/products/api/inventory/alerts/`, {
+        credentials: 'include',
+      });
 
-      if (error) throw error;
-      setAlerts(data || []);
+      if (!response.ok) throw new Error('Failed to fetch alerts');
+
+      const data = await response.json();
+      setAlerts(data.alerts || []);
+      setLowStockAlerts(data.low_stock_products || []);
     } catch (error: any) {
       console.error('Error fetching alerts:', error);
       toast.error('获取预警规则失败');
@@ -73,30 +70,16 @@ const InventoryAlerts = () => {
 
   const fetchProducts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('name');
+      const response = await fetch(`${API_BASE}/products/api/products/?page_size=100`, {
+        credentials: 'include',
+      });
 
-      if (error) throw error;
-      setProducts(data || []);
+      if (!response.ok) throw new Error('Failed to fetch products');
+
+      const data = await response.json();
+      setProducts(data.results || []);
     } catch (error: any) {
       console.error('Error fetching products:', error);
-    }
-  };
-
-  const checkAlerts = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('check-inventory-alerts');
-      
-      if (error) throw error;
-      
-      if (data?.low_stock_products && data.low_stock_products.length > 0) {
-        setLowStockAlerts(data.low_stock_products);
-        toast.warning(`发现 ${data.low_stock_count} 个商品库存不足！`);
-      }
-    } catch (error: any) {
-      console.error('Error checking alerts:', error);
     }
   };
 
@@ -107,15 +90,17 @@ const InventoryAlerts = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from('inventory_alerts')
-        .insert({
+      const response = await fetch(`${API_BASE}/products/api/inventory/alerts/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
           product_id: selectedProduct,
           threshold: parseInt(threshold),
-          is_active: true
-        });
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to add alert');
 
       toast.success('预警规则已添加');
       setDialogOpen(false);
@@ -128,14 +113,19 @@ const InventoryAlerts = () => {
     }
   };
 
-  const handleToggleAlert = async (alertId: string, isActive: boolean) => {
+  const handleToggleAlert = async (alertId: string | number, isActive: boolean) => {
     try {
-      const { error } = await supabase
-        .from('inventory_alerts')
-        .update({ is_active: !isActive })
-        .eq('id', alertId);
+      const response = await fetch(`${API_BASE}/products/api/inventory/alerts/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          alert_id: alertId,
+          is_active: !isActive,
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to toggle alert');
 
       toast.success(isActive ? '预警已关闭' : '预警已开启');
       fetchAlerts();
@@ -145,14 +135,18 @@ const InventoryAlerts = () => {
     }
   };
 
-  const handleDeleteAlert = async (alertId: string) => {
+  const handleDeleteAlert = async (alertId: string | number) => {
     try {
-      const { error } = await supabase
-        .from('inventory_alerts')
-        .delete()
-        .eq('id', alertId);
+      const response = await fetch(`${API_BASE}/products/api/inventory/alerts/`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          alert_id: alertId,
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to delete alert');
 
       toast.success('预警规则已删除');
       fetchAlerts();
@@ -161,6 +155,135 @@ const InventoryAlerts = () => {
       toast.error('删除失败');
     }
   };
+
+  return (
+    <div className="space-y-6">
+      {/* 低库存警报 */}
+      {lowStockAlerts.length > 0 && (
+        <Card className="border-warning">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-warning">
+              <AlertTriangle className="h-5 w-5" />
+              库存预警
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {lowStockAlerts.map((alert) => (
+                <div key={alert.product_id} className="flex items-center justify-between p-3 bg-warning/10 rounded-lg">
+                  <div>
+                    <p className="font-semibold">{alert.product_name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      当前库存: {alert.current_stock} / 预警阈值: {alert.threshold}
+                    </p>
+                  </div>
+                  <Badge variant="destructive">库存不足</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 预警规则管理 */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>预警规则</CardTitle>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  添加规则
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>添加库存预警规则</DialogTitle>
+                  <DialogDescription>
+                    设置商品的库存预警阈值，当库存低于该值时将自动通知
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>选择商品</Label>
+                    <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择一个商品" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>预警阈值（库存低于此值时触发）</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={threshold}
+                      onChange={(e) => setThreshold(e.target.value)}
+                      placeholder="输入数字"
+                    />
+                  </div>
+                  <Button onClick={handleAddAlert} className="w-full">
+                    创建预警
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-muted-foreground">加载中...</p>
+          ) : alerts.length === 0 ? (
+            <p className="text-muted-foreground">暂无预警规则</p>
+          ) : (
+            <div className="space-y-3">
+              {alerts.map((alert) => (
+                <div key={alert.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-semibold">{alert.product_name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      阈值: {alert.threshold} | 当前库存: {alert.current_stock}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleToggleAlert(alert.id, alert.is_active)}
+                    >
+                      {alert.is_active ? (
+                        <Bell className="h-4 w-4 text-primary" />
+                      ) : (
+                        <BellOff className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteAlert(alert.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default InventoryAlerts;
 
   return (
     <div className="space-y-6">

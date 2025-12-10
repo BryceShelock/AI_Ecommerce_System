@@ -2,9 +2,10 @@
 
 import json
 import random
+import os
+import re
 from core_ecommerce.models import Product, UserProfile
 from django.contrib.auth.models import User
-# 引入 requests 库用于模拟或真实调用 AI API
 import requests 
 
 class AIGuideService:
@@ -125,3 +126,96 @@ class AIGuideService:
         response_text = self._simulate_llm_response(message, tags, recommended_products)
         
         return response_text, list(recommended_products)
+
+    def call_external_llm(self, user_message, conversation_history=None, user=None):
+        """
+        调用外部 LLM（lovable gateway）。
+        失败时降级到本地模拟。
+        返回: (ai_response_text, recommended_products_list)
+        """
+        api_key = os.environ.get('LOVABLE_API_KEY') or os.environ.get('LLM_API_KEY')
+        
+        if not api_key:
+            # API key 未配置，使用本地模拟
+            print("[AIGuideService] LLM API key not configured, using local simulation")
+            return self.get_ai_response_with_products(user, user_message, conversation_history)
+        
+        try:
+            # 从 DB 获取推荐商品（用于上下文）
+            keywords = self._extract_keywords(user_message)
+            products = Product.objects.all()
+            
+            if keywords:
+                from django.db.models import Q
+                q_objects = Q()
+                for keyword in keywords:
+                    q_objects |= Q(name__icontains=keyword) | Q(category__icontains=keyword)
+                products = products.filter(q_objects)
+            
+            recommended_products = products.order_by('-potential_score', '-sales_count')[:6]
+            if not recommended_products:
+                recommended_products = Product.objects.filter(stock__gt=0).order_by('-sales_count')[:6]
+            
+            # 构建商品上下文
+            products_context = "\n".join([
+                f"商品: {p.name}, 价格: ¥{p.price}, 分类: {p.category}, 库存: {p.stock}"
+                for p in recommended_products[:10]
+            ])
+            
+            # 构建 system prompt
+            system_prompt = f"""你是一个专业的 AI 导购助手。请根据用户的需求提供商品推荐和咨询。
+
+当前可用商品：
+{products_context}
+
+请用自然的语言提供帮助，并在回复最后用 JSON 格式列出推荐的商品ID（如果有）。
+格式：RECOMMENDED_PRODUCTS: ["id1", "id2"]
+"""
+            
+            # 准备消息列表
+            messages = [
+                {"role": "user", "content": user_message}
+            ]
+            
+            # 调用 lovable gateway
+            url = 'https://ai.gateway.lovable.dev/v1/chat/completions'
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            }
+            payload = {
+                'model': 'google/gemini-2.5-flash',
+                'messages': [{"role": "system", "content": system_prompt}] + messages,
+                'temperature': 0.7,
+                'max_tokens': 500,
+            }
+            
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            data = response.json()
+            ai_message = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+            
+            # 解析推荐的商品 ID
+            recommended_products_data = []
+            match = re.search(r'RECOMMENDED_PRODUCTS:\s*(\[.*?\])', ai_message)
+            if match:
+                try:
+                    product_ids = json.loads(match.group(1))
+                    recommended_products_data = [
+                        p for p in recommended_products if str(p.id) in [str(pid) for pid in product_ids]
+                    ][:6]
+                except json.JSONDecodeError:
+                    pass
+            
+            # 移除 JSON 标记
+            clean_message = re.sub(r'RECOMMENDED_PRODUCTS:\s*\[.*?\]', '', ai_message).strip()
+            
+            return clean_message, recommended_products_data
+        
+        except requests.exceptions.RequestException as e:
+            print(f"[AIGuideService] LLM API call failed: {e}, falling back to local simulation")
+            return self.get_ai_response_with_products(user, user_message, conversation_history)
+        except Exception as e:
+            print(f"[AIGuideService] Unexpected error in call_external_llm: {e}")
+            return self.get_ai_response_with_products(user, user_message, conversation_history)

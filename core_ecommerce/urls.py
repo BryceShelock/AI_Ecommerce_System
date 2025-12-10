@@ -20,6 +20,7 @@ urlpatterns = [
     path('api/addresses/', api_views.ShippingAddressAPI.as_view(), name='api_addresses'),
     path('api/analytics/', api_views.AnalyticsDashboardAPI.as_view(), name='api_analytics'),
     path('api/inventory/monitor/', api_views.InventoryMonitorAPI.as_view(), name='api_inventory_monitor'),
+    path('api/inventory/alerts/', api_views.InventoryAlertsAPI.as_view(), name='api_inventory_alerts'),
     path('api/behavior/', api_views.UserBehaviorAPI.as_view(), name='api_user_behavior'),
     path('api/recommendations/', api_views.RecommendationAPI.as_view(), name='api_recommendations'),
 ]

@@ -18,11 +18,13 @@ def ai_chat_api(request):
     """
     AI 导购对话 API 接口。
     支持自然语言对话，理解买家意图并推荐商品。
+    支持本地模拟与外部 LLM（lovable gateway）两种模式。
     """
     try:
         data = request.data if hasattr(request, 'data') else json.loads(request.body)
         messages = data.get('messages', [])
         session_id = data.get('sessionId', '')
+        use_external_llm = data.get('useExternalLLM', True)  # 默认尝试外部 LLM
         
         if not messages:
             return Response({'error': 'No messages provided'}, status=400)
@@ -38,10 +40,15 @@ def ai_chat_api(request):
         
         service = AIGuideService()
         
-        # 分析用户意图并推荐商品
-        ai_response_text, recommended_products = service.get_ai_response_with_products(
-            user, user_message, messages
-        )
+        # 选择使用外部 LLM 或本地模拟
+        if use_external_llm:
+            ai_response_text, recommended_products = service.call_external_llm(
+                user_message, messages, user
+            )
+        else:
+            ai_response_text, recommended_products = service.get_ai_response_with_products(
+                user, user_message, messages
+            )
         
         # 格式化推荐商品数据
         recommended_products_data = []

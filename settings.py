@@ -2,12 +2,15 @@
 
 import os
 from pathlib import Path
+from os import getenv
+from dotenv import load_dotenv  # 如果使用 python-dotenv
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+# 加载 .env 文件（如果存在）
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / '.env')
 
-SECRET_KEY = 'django-insecure-your-secret-key-for-demo-purposes' # 生产环境请替换
+SECRET_KEY = getenv('SECRET_KEY', 'django-insecure-your-secret-key-for-demo-purposes')
 
-DEBUG = True
+DEBUG = getenv('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = []
 

@@ -635,3 +635,110 @@ class RecommendationAPI(APIView):
             return Response({'recommendations': serializer.data})
         except Exception:
             return Response({'recommendations': []})
+
+
+class InventoryAlertsAPI(APIView):
+    """库存预警规则管理 API"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """获取库存预警规则"""
+        try:
+            alerts = InventoryAlert.objects.filter(is_active=True).select_related('product')
+            
+            alerts_data = []
+            for alert in alerts:
+                alerts_data.append({
+                    'id': alert.id,
+                    'product_id': alert.product.id,
+                    'product_name': alert.product.name,
+                    'threshold': alert.threshold,
+                    'current_stock': alert.product.stock,
+                    'is_active': alert.is_active,
+                    'last_alerted_at': alert.last_alerted_at.isoformat() if alert.last_alerted_at else None,
+                })
+            
+            # 获取低库存商品（预警触发的）
+            low_stock_threshold = int(request.GET.get('threshold', 10))
+            low_stock_products = Product.objects.filter(stock__lt=low_stock_threshold).order_by('stock')[:20]
+            
+            low_stock_data = [
+                {
+                    'id': p.id,
+                    'product_id': p.id,
+                    'product_name': p.name,
+                    'current_stock': p.stock,
+                    'threshold': low_stock_threshold,
+                    'category': p.category,
+                }
+                for p in low_stock_products
+            ]
+            
+            return Response({
+                'alerts': alerts_data,
+                'low_stock_products': low_stock_data,
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request):
+        """创建库存预警规则"""
+        try:
+            product_id = request.data.get('product_id')
+            threshold = int(request.data.get('threshold', 10))
+            
+            product = Product.objects.get(id=product_id)
+            
+            alert, created = InventoryAlert.objects.get_or_create(
+                product=product,
+                defaults={'threshold': threshold, 'is_active': True}
+            )
+            
+            if not created:
+                alert.threshold = threshold
+                alert.is_active = True
+                alert.save()
+            
+            return Response({
+                'id': alert.id,
+                'message': '预警规则已保存',
+            })
+        except Product.DoesNotExist:
+            return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def put(self, request):
+        """更新预警规则"""
+        try:
+            alert_id = request.data.get('alert_id')
+            is_active = request.data.get('is_active')
+            threshold = request.data.get('threshold')
+            
+            alert = InventoryAlert.objects.get(id=alert_id)
+            
+            if is_active is not None:
+                alert.is_active = is_active
+            if threshold is not None:
+                alert.threshold = int(threshold)
+            
+            alert.save()
+            
+            return Response({'message': '预警规则已更新'})
+        except InventoryAlert.DoesNotExist:
+            return Response({'error': 'Alert not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request):
+        """删除预警规则"""
+        try:
+            alert_id = request.data.get('alert_id') or request.GET.get('alert_id')
+            alert = InventoryAlert.objects.get(id=alert_id)
+            alert.delete()
+            
+            return Response({'message': '预警规则已删除'})
+        except InventoryAlert.DoesNotExist:
+            return Response({'error': 'Alert not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
