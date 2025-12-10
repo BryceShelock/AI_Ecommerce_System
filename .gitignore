@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.env
+.env.local
+venv/
+*.sqlite3
+
+# Django
+staticfiles/
+media/
+
+# Node / Vite / React
+node_modules/
+dist/
+.vite/
+
+# Supabase
+.supabase/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

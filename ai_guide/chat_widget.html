@@ -1,0 +1,116 @@
+<div id="ai-guide-container">
+    <button id="ai-guide-toggle-btn" 
+            style="background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+        AI 导购
+    </button>
+
+    <div id="ai-chat-box" 
+         style="display: none; position: absolute; bottom: 60px; right: 0; width: 300px; height: 400px; background: white; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column;">
+        
+        <div style="padding: 10px; background-color: #007bff; color: white; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+            AI 导购助手 (24H 在线)
+        </div>
+        
+        <div id="chat-messages" 
+             style="flex-grow: 1; padding: 10px; overflow-y: auto; background-color: #f9f9f9;">
+            <p style="text-align: left; color: #555;">**AI:** 您好！我是AI导购，请问您在选购商品时有什么需求？</p>
+        </div>
+
+        <div style="padding: 10px; border-top: 1px solid #eee; display: flex;">
+            <input type="text" id="user-input" placeholder="输入您的问题..." style="flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+            <button id="send-btn" style="margin-left: 8px; padding: 8px 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">发送</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleBtn = document.getElementById('ai-guide-toggle-btn');
+        const chatBox = document.getElementById('ai-chat-box');
+        const sendBtn = document.getElementById('send-btn');
+        const userInput = document.getElementById('user-input');
+        const chatMessages = document.getElementById('chat-messages');
+
+        toggleBtn.onclick = function() {
+            chatBox.style.display = chatBox.style.display === 'none' ? 'flex' : 'none';
+        };
+
+        function sendMessage() {
+            const message = userInput.value.trim();
+            if (message === "") return;
+
+            // 显示用户消息
+            const userMsg = document.createElement('p');
+            userMsg.style.textAlign = 'right';
+            userMsg.style.color = '#007bff';
+            userMsg.innerHTML = '<strong>您:</strong> ' + message;
+            chatMessages.appendChild(userMsg);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            userInput.value = '';
+            
+            // 禁用输入，显示等待
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+            sendBtn.textContent = '思考中...';
+
+            // 调用 AI 导购 API
+            fetch('{% url "ai_chat_api" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') // Django CSRF 令牌
+                },
+                body: JSON.stringify({ 'message': message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const aiMsg = document.createElement('p');
+                aiMsg.style.textAlign = 'left';
+                aiMsg.style.color = '#555';
+                aiMsg.innerHTML = '<strong>AI:</strong> ' + data.message.replace(/\n/g, '<br>'); // 处理换行
+                chatMessages.appendChild(aiMsg);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                sendBtn.textContent = '发送';
+            })
+            .catch(error => {
+                const errorMsg = document.createElement('p');
+                errorMsg.style.textAlign = 'left';
+                errorMsg.style.color = 'red';
+                errorMsg.innerHTML = '<strong>AI:</strong> 抱歉，连接失败。';
+                chatMessages.appendChild(errorMsg);
+                console.error('API Error:', error);
+                
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                sendBtn.textContent = '发送';
+            });
+        }
+
+        sendBtn.onclick = sendMessage;
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // 获取 CSRF Token 的辅助函数
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.startsWith(name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    });
+</script>

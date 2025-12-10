@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}电商管理系统{% endblock %}</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; margin: 0; padding: 0; background-color: #f4f7f9; }
+        nav { background-color: #333; color: white; padding: 15px; text-align: center; }
+        nav a { color: white; margin: 0 15px; text-decoration: none; font-weight: bold; }
+        .container { width: 90%; margin: 20px auto; background-color: white; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #007bff; }
+        /* 简单样式，方便集成 AI 导购悬浮按钮 */
+        .ai-guide-widget { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="{% url 'homepage' %}">首页</a>
+        <a href="{% url 'product_list' %}">商品管理</a>
+        <a href="{% url 'order_list' %}">订单管理</a>
+        <a href="{% url 'ai_selection_dashboard' %}">AI 选品看板</a>
+        {% if user.is_authenticated and user.is_staff %}
+        <a href="/admin/">管理后台</a>
+        {% endif %}
+    </nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <div class="ai-guide-widget">
+        {% include 'ai_guide/chat_widget.html' %} 
+    </div>
+</body>
+</html>

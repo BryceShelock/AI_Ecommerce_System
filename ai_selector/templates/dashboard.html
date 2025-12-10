@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}AI 选品看板{% endblock %}
+{% block content %}
+    <h1>AI 选品核心看板 (B端管理)</h1>
+
+    <h2>运营核心 KPI 概览</h2>
+    <p>日期: {{ report.date }}</p>
+    <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+        <div style="padding: 15px; border: 1px solid #ccc; flex: 1;">
+            <strong>转化率:</strong> {{ report.top_kpi.转化率 }}
+        </div>
+        <div style="padding: 15px; border: 1px solid #ccc; flex: 1;">
+            <strong>客单价:</strong> {{ report.top_kpi.客单价 }}
+        </div>
+    </div>
+
+    <h2>市场趋势与潜力预测</h2>
+    <table border="1" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th>品类</th>
+                <th>市场增长率</th>
+                <th>竞争度</th>
+                <th>潜力分析</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trend in report.trends %}
+            <tr>
+                <td>{{ trend.category }}</td>
+                <td>{{ trend.growth|floatformat:1 }}%</td>
+                <td>{{ trend.competition|floatformat:1 }}</td>
+                <td>{% if trend.growth > 0.15 %}高增长蓝海{% else %}稳定市场{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 style="margin-top: 30px;">AI 智能选品推荐清单</h2>
+    <p>以下是系统基于多模态数据分析为您推荐的高潜力商品:</p>
+    <table border="1" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th>商品名称</th>
+                <th>SKU</th>
+                <th>AI 潜力评分</th>
+                <th>当前库存</th>
+                <th>AI 推荐理由</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in recommended_products %}
+            <tr>
+                <td><a href="{% url 'product_detail' product.id %}">{{ product.name }}</a></td>
+                <td>{{ product.sku }}</td>
+                <td style="font-weight: bold; color: {% if product.potential_score >= 0.5 %}green{% else %}orange{% endif %};">{{ product.potential_score|floatformat:2 }}</td>
+                <td>{{ product.stock }}</td>
+                <td>{{ product.selection_reason }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+{% endblock %}

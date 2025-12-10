@@ -1,0 +1,14 @@
+# Core Django stack
+Django==4.2.18
+# HTTP helpers
+requests
+# JSON processing
+simplejson
+# Django REST framework for API
+djangorestframework
+# CORS support for frontend development
+django-cors-headers
+# Async tasks
+celery
+# Redis backend
+redis

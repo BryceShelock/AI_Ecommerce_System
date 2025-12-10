@@ -1,0 +1,13 @@
+project_id = "wxayqadojjhyqpkbogyi"
+
+[functions.ai-shopping-guide]
+verify_jwt = false
+
+[functions.check-inventory-alerts]
+verify_jwt = false
+
+[functions.enhanced-ai-guide]
+verify_jwt = false
+
+[functions.web-scraper]
+verify_jwt = false
